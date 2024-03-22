@@ -5,22 +5,32 @@
 #include <linux/sched/signal.h>
 #include <linux/string.h>
 
-#define TARGET_PROCESS_NAME "target_proc"
+static int target_pid = 1;
+
+module_param(target_pid, int, S_IRUGO);
+
+static void print_process_tree(struct task_struct *task, int depth) {
+  struct task_struct *child_task;
+  struct list_head *list;
+
+  printk(KERN_INFO "%*s|- %s (PID: %d)\n", depth * 4, "", task->comm,
+         task->pid);
+
+  list_for_each(list, &task->children) {
+    child_task = list_entry(list, struct task_struct, sibling);
+    print_process_tree(child_task, depth + 1);
+  }
+}
 
 static int monitor_child_init(void) {
   struct task_struct *task;
-  struct task_struct *child_task;
 
-  printk(KERN_INFO "Monitoring process with name: %s\n", TARGET_PROCESS_NAME);
+  printk(KERN_INFO "Monitoring process tree with root PID: %d\n", target_pid);
 
   for_each_process(task) {
-    if (strcmp(task->comm, TARGET_PROCESS_NAME) == 0) {
-      printk(KERN_INFO "Target process name: %s, PID: %d\n", task->comm,
-             task->pid);
-
-      list_for_each_entry(child_task, &task->children, sibling) {
-        printk(KERN_INFO "Child process PID: %d\n", child_task->pid);
-      }
+    if (task->pid == target_pid) {
+      print_process_tree(task, 0);
+      break;
     }
   }
 
@@ -35,6 +45,6 @@ module_init(monitor_child_init);
 module_exit(monitor_child_exit);
 
 MODULE_LICENSE("GPL");
-MODULE_DESCRIPTION(
-    "Kernel module to monitor child processes of a specific process by name");
+MODULE_DESCRIPTION("Kernel module to monitor child processes of a specific "
+                   "process by PID and display process tree");
 MODULE_AUTHOR("Anirudh Prasad");
